@@ -33,9 +33,9 @@ and later just `mvn test` generator fails on following error:
 [ERROR] : org.junit.rules.TestRule
 ```
 
-It basically says that class `org.junit.rules.TestRule` cannot be found, but we have this class on classpath!
+It basically says that class `org.junit.rules.TestRule` cannot be found, but we have this class on classpath (at least in mvn "test" scope)!
 
-Running `mvn test -X` to see stack trace and debug output of Maven execution. Output reveals that class real cannot
+Running `mvn test -X` to see stack trace and debug output of Maven execution. Output reveals that class really cannot
 be found. Again, why?
 
 ```
@@ -55,7 +55,7 @@ Caused by: java.lang.ClassNotFoundException: org.junit.rules.TestRule
 AssertJ generator mojo works as follows.
 
 - First it looks at project classloader and detects configured classes. In our case `cz.bedla.dto` package.
-- Second it generates assertion classes for those detected classes
+- Second it generates assertion classes for those detected classes.
 
 When we have default plugin configuration as follows:
 
@@ -109,7 +109,9 @@ cz.bedla.dto.JUnitSoftAssertions
 From plugin point of view those classes have to be analysed and that's the problem. For details see 
 "Technical description of problem" chapter.
 
-### Workaround 1 - you need JUnit4 soft assertions generated
+## Workarounds
+
+### Workaround 1 - when you need JUnit4 soft assertions generated
 
 When you need JUnit4 soft assertions to be generated you have to repeat JUnit4 dependency on plugin's classpath.
 
@@ -144,7 +146,7 @@ When you need JUnit4 soft assertions to be generated you have to repeat JUnit4 d
 Build dependency of JUnit4 is only used to detect if it is possible to generate JUnit4 soft-assertions.
 See `org.assertj.maven.AssertJAssertionsGeneratorMojo#junitFoundBy` method, and it's usage.
 
-### Workaround 2 - you don't need JUnit4 soft assertions generated
+### Workaround 2 - when you DON'T need JUnit4 soft assertions generated
 
 When you don't need JUnit4 soft assertion (for example when you use JUnit5, etc.) it is possible disable their 
 generation.
@@ -204,7 +206,7 @@ previous run. This means that error occurs even in this case.
 
 Note: in this case you don't need JUnit4 plugin's dependency.
 
-## Technical description of problem
+## Deeper analysis of the problem
 
 As described above second run of generator with already generated assertion classes fails badly with classloader error.
 
