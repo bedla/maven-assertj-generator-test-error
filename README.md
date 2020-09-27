@@ -174,7 +174,7 @@ generation.
 
 Note: in this case you don't need JUnit4 plugin's dependency.
 
-### Workaround 3 (Not working) - you need JUnit4 soft assertions generated
+### Workaround 3 (Not working) - you need JUnit4 soft assertions generated (using `cleanTargetDir` flag)
 
 When you need JUnit4 soft assertion, but don't want to add artificial plugin dependency of JUnit4 on the plugin's 
 class path.
