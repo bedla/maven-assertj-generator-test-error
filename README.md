@@ -211,7 +211,7 @@ Note: in this case you don't need JUnit4 plugin's dependency.
 As described above second run of generator with already generated assertion classes fails badly with classloader error.
 
 Problem is with plugin flag `generateJUnitSoftAssertions=true` and generated class `cz.bedla.dto.JUnitSoftAssertions`
- from `target/generated-test-sources/assertj-assertions` directory.
+ from `target/generated-test-sources/assertj-assertions` directory (and compiled `.class` files).
 
 First let's look at class in question.
 
@@ -230,6 +230,7 @@ AssertJ Core class implements interface from `junit-4.12.jar`.
 
 ```java
 package org.assertj.core.api;
+
 public class JUnitSoftAssertions extends AbstractStandardSoftAssertions implements org.junit.rules.TestRule {
  // class body here 
 }
@@ -242,14 +243,16 @@ Steps are following:
 
 ### 1) Execute AssertJ generator mojo 
 
+`execute` method is starting point for all Maven plugins.
+
 ```
 org.assertj.maven.AssertJAssertionsGeneratorMojo#execute(...)
 ```
 
-### 2) Create `projectClassloader` as new instance of `URLClassLoader` with urls from current project's
-compile and test classpath.
+### 2) Create `projectClassloader` as new instance of `URLClassLoader` with urls from current project's compile and test classpath.
 
-Method `org.assertj.maven.AssertJAssertionsGeneratorMojo#getProjectClassLoader(...)`
+Method `org.assertj.maven.AssertJAssertionsGeneratorMojo#getProjectClassLoader(...)` creates new `URLClassLoader`
+with elements from compile and test classpath.
 
 ``` 
 project.getCompileClasspathElements()
@@ -265,7 +268,7 @@ project.getTestClasspathElements()
 +- ...
 ```
 
-As you can see test classpath correctly contains `assertj-core-2.9.1.jar` and `junit-4.12.jar`.
+As you can see **test classpath** correctly contains `assertj-core-2.9.1.jar` and `junit-4.12.jar`.
 
 This `projectClassLoader` has a parent classloader from current `Thread.currentThread().getContextClassLoader()`. 
 
@@ -278,7 +281,8 @@ projectClassLoader = new URLClassLoader(..., Thread.currentThread().getContextCl
   +- ... 
 ```
 
-The `contextClassLoader` is ClassWorlds Realm of current AssertJ generator plugin.
+The `contextClassLoader` is ClassWorlds Realm of current AssertJ generator plugin. It also contains 
+`assertj-core-2.9.1.jar` library, but there is no `junit-4.12.jar` on `contextClassLoader`'s classpath.
 
 ```
 contextClassLoader = Thread.currentThread().getContextClassLoader() =
@@ -293,9 +297,7 @@ contextClassLoader = Thread.currentThread().getContextClassLoader() =
    +- ...
 ```
 
-Note 1: there is not `junit-4.12.jar` on `contextClassLoader`'s classpath.
-
-Note 2: `importRealm` is only one and points to main Maven's realm. 
+Note: `importRealm` is only one in list and points to main Maven's realm. 
 
 ### 3) Find classes to process for package `cz.bedla.dto`
 
@@ -305,8 +307,7 @@ org.assertj.assertions.generator.util.ClassUtil#getPackageClassesFromClasspathFi
 1 = {URL@3729} "file:/C:/Users/ivo.smid/IdeaProjects/maven-assertj-generator-test-error/target/test-classes/cz%5cbedla%5cdto"
 ```
 
-This will also find `cz/bedla/dto/JUnitSoftAssertions.class` class from compiled from generated test sources. And
-will try to load metadata from it.
+This will also find `cz/bedla/dto/JUnitSoftAssertions.class` compiled class from generated test sources.
 
 ### 4) Load class metadata from detected `.class` files 
 
@@ -346,10 +347,12 @@ This means that when JVM sees that `cz.bedla.dto.JUnitSoftAssertions` extends
 
 Context class loader is ClassWorlds realm 
 `ClassRealm[plugin>org.assertj:assertj-assertions-generator-maven-plugin:2.2.0, parent: ...]` with 
-`assertj-core-2.9.1.jar` library, but without `junit-4.12.jar`. 
+`assertj-core-2.9.1.jar` library, but without `junit-4.12.jar` (because it is not plugin's dependency by definition,
+ and also it is not defined as `<dependency>` as described at 
+ `Workaround 1 - when you need JUnit4 soft assertions generated`). 
 
 ```java
- contextClassLoader.findClass("org.assertj.core.api.JUnitSoftAssertions")
+ contextClassLoader.findClass("org.assertj.core.api.JUnitSoftAssertions");
 
  Resource res = urlClassPath.getResource("org/assertj/core/api/JUnitSoftAssertions.class", false);
  if (res != null) {
@@ -360,7 +363,7 @@ Context class loader is ClassWorlds realm
 ```
 
 `contextClassLoader` asks it's `urlClassPath` if it contains `org.assertj.core.api.JUnitSoftAssertions` and it 
-answers yes by returning non-null `res` variable.
+answers yes by returning non-`null` `res` variable.
 
 ### 7) Load `org.junit.rules.TestRule` class from `contextClassLoader`
 
@@ -380,7 +383,7 @@ contextClassLoader.loadClassFromImport("org.junit.rules.TestRule")
 importRealm.loadClass(""org.junit.rules.TestRule"") = throw new ClassNotFoundException(...)
 ``` 
 
-### 8) Why does this happen
+### Why does this happen
 
 Interface `org.junit.rules.TestRule` currently lives in `projectClassLoader` and `contextClassLoader` tries to load it.
 This two class loaders are in different hierarchy and that's why it is not possible to load that interface.
